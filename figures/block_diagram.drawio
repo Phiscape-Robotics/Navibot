@@ -1,0 +1,99 @@
+<mxfile host="app.diagrams.net" agent="Codex">
+  <diagram id="navibot-electronics" name="NaviBot - Electronics Blocks">
+    <mxGraphModel dx="1245" dy="925" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=28;fontStyle=1;fontColor=#172554;" value="NaviBot | Electronics Block Diagram" vertex="1">
+          <mxGeometry height="44" width="760" x="50" y="28" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=14;fontColor=#475569;" value="Hardware blocks arranged by role • Power, control, and sensor links are color-coded" vertex="1">
+          <mxGeometry height="28" width="930" x="52" y="72" as="geometry" />
+        </mxCell>
+        <mxCell id="power_group" parent="1" style="swimlane;html=1;startSize=38;rounded=1;fillColor=#fff7f7;swimlaneFillColor=#fee2e2;strokeColor=#ef4444;fontStyle=1;fontSize=15;" value="POWER" vertex="1">
+          <mxGeometry height="480" width="310" x="60" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="battery" parent="power_group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#ef4444;fontSize=17;fontStyle=1;arcSize=12;" value="11.1 V Li-ion Battery" vertex="1">
+          <mxGeometry height="90" width="240" x="35" y="211" as="geometry" />
+        </mxCell>
+        <mxCell id="regulator" parent="power_group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#ef4444;fontSize=16;fontStyle=1;arcSize=12;" value="Voltage Regulator&#xa;&amp; Power Module" vertex="1">
+          <mxGeometry height="90" width="240" x="35" y="77" as="geometry" />
+        </mxCell>
+        <mxCell id="compute_group" parent="1" style="swimlane;html=1;startSize=38;rounded=1;fillColor=#f5f3ff;swimlaneFillColor=#ede9fe;strokeColor=#8b5cf6;fontStyle=1;fontSize=15;" value="COMPUTE &amp; SENSING" vertex="1">
+          <mxGeometry height="480" width="420" x="440" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="pi" parent="compute_group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#8b5cf6;fontSize=18;fontStyle=1;arcSize=12;" value="Raspberry Pi 4B (4 GB)" vertex="1">
+          <mxGeometry height="95" width="330" x="45" y="72" as="geometry" />
+        </mxCell>
+        <mxCell id="imu" parent="compute_group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#8b5cf6;fontSize=17;fontStyle=1;arcSize=12;" value="LiDAR" vertex="1">
+          <mxGeometry height="82" width="330" x="45" y="214" as="geometry" />
+        </mxCell>
+        <mxCell id="a_86K4NhaNTjbOQmLPQP-1" parent="compute_group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#8b5cf6;fontSize=17;fontStyle=1;arcSize=12;" value="Camera" vertex="1">
+          <mxGeometry height="82" width="330" x="45" y="350" as="geometry" />
+        </mxCell>
+        <mxCell id="drive_group" parent="1" style="swimlane;html=1;startSize=38;rounded=1;fillColor=#fffaf0;swimlaneFillColor=#ffedd5;strokeColor=#f97316;fontStyle=1;fontSize=15;" value="DRIVE SYSTEM" vertex="1">
+          <mxGeometry height="480" width="390" x="930" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="driver" parent="drive_group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#f97316;fontSize=17;fontStyle=1;arcSize=12;" value="L298N Dual H-Bridge&#xa;Motor Driver" vertex="1">
+          <mxGeometry height="90" width="320" x="30" y="211" as="geometry" />
+        </mxCell>
+        <mxCell id="motors" parent="drive_group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#f97316;fontSize=17;fontStyle=1;arcSize=12;" value="Arduino" vertex="1">
+          <mxGeometry height="90" width="320" x="30" y="74" as="geometry" />
+        </mxCell>
+        <mxCell id="a_86K4NhaNTjbOQmLPQP-2" parent="drive_group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#f97316;fontSize=17;fontStyle=1;arcSize=12;" value="4 × DC Motors with Encoders" vertex="1">
+          <mxGeometry height="90" width="320" x="30" y="346" as="geometry" />
+        </mxCell>
+        <mxCell id="chassis" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#64748b;fontSize=16;fontStyle=1;arcSize=12;" value="Chassis &amp; Brackets" vertex="1">
+          <mxGeometry height="72" width="420" x="440" y="700" as="geometry" />
+        </mxCell>
+        <mxCell id="p_batt_reg" edge="1" parent="1" source="battery" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#dc2626;fontSize=12;labelBackgroundColor=#ffffff;exitX=0.50;exitY=0;exitDx=0;exitDy=0;entryX=0.50;entryY=1;entryDx=0;entryDy=0;" target="regulator" value="11.1 V nominal DC">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p_batt_driver" edge="1" parent="1" source="battery" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#dc2626;fontSize=12;labelBackgroundColor=#ffffff;exitX=1;exitY=0.50;exitDx=0;exitDy=0;entryX=0;entryY=0.50;entryDx=0;entryDy=0;" target="driver" value="Motor supply • 11.1 V nominal">
+          <mxGeometry relative="1" x="-0.4449" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="400.07" y="406.07" />
+              <mxPoint x="400.07" y="470.07" />
+              <mxPoint x="900.07" y="470.07" />
+              <mxPoint x="900.07" y="406.07" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="p_reg_pi" edge="1" parent="1" source="regulator" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#dc2626;fontSize=12;labelBackgroundColor=#ffffff;exitX=1;exitY=0.50;exitDx=0;exitDy=0;entryX=0;entryY=0.50;entryDx=0;entryDy=0;" target="pi" value="Regulated 5 V">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="d_pi_arduino" edge="1" parent="1" source="pi" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#2563eb;fontSize=12;labelBackgroundColor=#ffffff;exitX=1;exitY=0.50;exitDx=0;exitDy=0;entryX=0;entryY=0.50;entryDx=0;entryDy=0;" target="motors" value="UART • command / status">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="d_arduino_driver" edge="1" parent="1" source="motors" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#2563eb;fontSize=12;labelBackgroundColor=#ffffff;exitX=0.50;exitY=1;exitDx=0;exitDy=0;entryX=0.50;entryY=0;entryDx=0;entryDy=0;" target="driver" value="GPIO • direction + PWM">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="d_driver_wheels" edge="1" parent="1" source="driver" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#2563eb;fontSize=12;labelBackgroundColor=#ffffff;exitX=0.50;exitY=1;exitDx=0;exitDy=0;entryX=0.50;entryY=0;entryDx=0;entryDy=0;" target="a_86K4NhaNTjbOQmLPQP-2" value="Motor outputs">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="d_encoder_arduino" edge="1" parent="1" source="a_86K4NhaNTjbOQmLPQP-2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#16a34a;fontSize=12;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.50;entryDx=0;entryDy=0;" target="motors" value="Encoder feedback">
+          <mxGeometry relative="1" x="-0.4806" y="50" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="1300.07" y="541" />
+              <mxPoint x="1300.07" y="269" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="d_lidar_pi" edge="1" parent="1" source="imu" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#16a34a;fontSize=12;labelBackgroundColor=#ffffff;exitX=0.50;exitY=0;exitDx=0;exitDy=0;entryX=0.50;entryY=1;entryDx=0;entryDy=0;" target="pi" value="LiDAR data • interface TBD">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="d_camera_pi" edge="1" parent="1" source="a_86K4NhaNTjbOQmLPQP-1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#16a34a;fontSize=12;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.75;entryDx=0;entryDy=0;" target="pi" value="Image data • CSI / USB TBD">
+          <mxGeometry relative="1" x="-1" y="68" as="geometry">
+            <mxPoint x="-45" y="17" as="offset" />
+            <Array as="points">
+              <mxPoint x="840.07" y="541.67" />
+              <mxPoint x="840.07" y="293.67" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

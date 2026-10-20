@@ -1,0 +1,28 @@
+% Problem statement and constraints
+\section{Problem Statement \& System Constraints}
+
+\subsection{Problem Definition}
+The engineering problem has not yet been supplied. Define the task NaviBot must perform, the environment and users it serves, and the current limitation the design is intended to address. The project name and component diagram alone do not establish these requirements.
+
+\subsection{Known Design Inputs}
+The architecture diagram depicts an 11.1 V nominal Li-ion battery, Raspberry Pi 4B, LiDAR, camera, Arduino, L298N dual H-bridge, and four DC motors with encoders. These are candidate items shown in the diagram; ratings, compatibility, and realized configuration require confirmation.
+
+\subsection{Constraints and Verification}
+\begin{table}[!htbp]
+    \centering
+    \small
+    \renewcommand{\arraystretch}{1.4}
+    \begin{tabular}{p{3.3cm}p{4.5cm}p{6cm}}
+        \toprule
+        \textbf{Constraint class} & \textbf{Current information} & \textbf{Required definition / verification} \\
+        \midrule
+        Operating environment & TBD & Define surfaces, lighting, obstacles, and environmental limits. \\
+        Motion and navigation & TBD & Define speed, range, accuracy, and acceptance tests as applicable. \\
+        Electrical and power & Diagram shows nominal 11.1 V battery; detailed ratings TBD & Verify loads, rail voltages, current, protection, and runtime. \\
+        Computing and sensing & Pi 4B, LiDAR, and camera are depicted & Confirm models, interfaces, timing, and software requirements. \\
+        Safety and operation & TBD & Identify hazards, safe behavior, and operating limits. \\
+        Cost and procurement & TBD & Establish budget and selected part numbers. \\
+        \bottomrule
+    \end{tabular}
+    \caption{Initial constraints register}
+\end{table}

@@ -1,0 +1,14 @@
+% Software and firmware design
+\section{Software Design \& Processing}
+
+\subsection{Software Inventory}
+The repository currently contains \texttt{scan\_wifi\_devices.py}. It uses Python's standard library and operating-system network tools to identify the local IPv4 network, probe hosts, and print IP/MAC entries available through ARP or neighbour data. The script describes its results as best-effort and notes that devices may not appear if they ignore ping or are isolated. It does not establish that this utility is part of the robot's onboard control software.
+
+\subsection{Onboard Software Architecture}
+\textit{To be completed: list the deployed software, runtime environment, modules, data flow, and responsibilities of each controller.}
+
+\subsection{Communications and Data}
+The block diagram labels UART command/status between the Raspberry Pi and Arduino. Message format, baud rate, timing, error detection, and recovery behavior are TBD. The diagram also labels GPIO direction/PWM and encoder feedback at the drive controller; pin assignments and control-loop behavior require confirmation.
+
+\subsection{Fault Handling and Validation}
+\textit{To be completed: define software fault detection, logging, operator alerts, safe-state behavior, and tests. No software validation results are recorded in the current repository.}
