@@ -8,12 +8,18 @@ not appear. Run on the computer connected to the Wi-Fi network you want to scan.
 
 import concurrent.futures
 import ipaddress
+import os
 import platform
 import re
+import shutil
+import xml.etree.ElementTree as ET
 import socket
 import subprocess
 import sys
 import uuid
+
+TARGET_NAME = "Navibot"
+TARGET_MAC = "88:A2:9E:AD:13:8B"
 
 
 def run(command, timeout=5):
@@ -139,6 +145,41 @@ def arp_entries():
     return entries
 
 
+def nmap_arp_entries(network):
+    """Use privileged Nmap ARP discovery to find quiet hosts by MAC."""
+    nmap = shutil.which("nmap")
+    if not nmap:
+        return {}, "Nmap is not installed; skipping MAC-based discovery."
+    if not getattr(os, "geteuid", lambda: 1)() == 0:
+        return {}, "Run with sudo to enable Nmap ARP discovery and identify devices by MAC."
+    try:
+        result = subprocess.run(
+            [nmap, "-sn", "-PR", "-oX", "-", str(network)],
+            capture_output=True, text=True, timeout=120, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {}, f"Nmap ARP discovery failed: {exc}"
+    if result.returncode != 0:
+        detail = result.stderr.strip() or f"Nmap exited with status {result.returncode}"
+        return {}, detail
+    try:
+        root = ET.fromstring(result.stdout)
+    except ET.ParseError as exc:
+        return {}, f"Could not parse Nmap output: {exc}"
+    entries = {}
+    for host in root.findall("host"):
+        status = host.find("status")
+        if status is None or status.get("state") != "up":
+            continue
+        ip = next((addr.get("addr") for addr in host.findall("address")
+                   if addr.get("addrtype") == "ipv4"), None)
+        mac = next((addr.get("addr") for addr in host.findall("address")
+                    if addr.get("addrtype") == "mac"), None)
+        if ip and mac:
+            entries[ip] = mac.upper()
+    return entries, None
+
+
 def main():
     ip = local_ipv4()
     if not ip or ip.startswith("169.254."):
@@ -161,6 +202,10 @@ def main():
         list(pool.map(ping, hosts))
 
     found = arp_entries()
+    nmap_found, nmap_note = nmap_arp_entries(network)
+    found.update(nmap_found)
+    if nmap_note:
+        print(f"Nmap: {nmap_note}")
     # The computer itself is not guaranteed to be listed in its ARP cache.
     found[ip] = own_mac()
     if gateway and gateway not in found:
@@ -173,7 +218,12 @@ def main():
     for address, mac in devices:
         print(f"{address:<16}  {mac}")
     print(f"\nListed {len(devices)} device(s), including this computer and the default gateway when detected.")
-    print("This is best-effort: devices that do not respond to ping or are isolated may be missing.")
+    target = next((address for address, mac in devices if mac.upper() == TARGET_MAC), None)
+    if target:
+        print(f"{TARGET_NAME} found at {target} (MAC {TARGET_MAC}).")
+    else:
+        print(f"{TARGET_NAME} ({TARGET_MAC}) was not found on {network}.")
+    print("This is best-effort: devices on another subnet or isolated Wi-Fi may be missing.")
 
 
 if __name__ == "__main__":
