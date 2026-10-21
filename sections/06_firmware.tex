@@ -1,14 +1,60 @@
-% Software and firmware design
+% Raspberry Pi software and low-level firmware design
 \section{Software Design \& Processing}
 
-\subsection{Software Inventory}
-The repository currently contains \texttt{tools/scan\_wifi\_devices.py}. It uses Python's standard library and operating-system network tools to identify the local IPv4 network, probe hosts, and print IP/MAC entries available through ARP or neighbour data. The script describes its results as best-effort and notes that devices may not appear if they ignore ping or are isolated. It does not establish that this utility is part of the robot's onboard control software.
+\subsection{Raspberry Pi Role and Platform}
+The Raspberry Pi 4B (4 GB) is the planned high-level compute and sensing unit. The proposed software platform is ROS 2 Lyrical Luth on 64-bit Ubuntu 26.04 LTS for arm64. ROS 2 lists arm64 Ubuntu 26.04 as a Tier 1 platform, and Ubuntu provides Raspberry Pi images for this release \cite{ros_lyrical_platforms,ubuntu_raspberry_pi}. The actual Pi model, operating system, storage, and power arrangement must be confirmed before deployment.
 
-\subsection{Onboard Software Architecture}
-\textit{To be completed: list the deployed software, runtime environment, modules, data flow, and responsibilities of each controller.}
+The Pi handles sensor drivers, high-level behavior, and communication with the motor controllers. It does not perform the motor-level control loop. Each Arduino remains responsible for its two motors, encoder acquisition, and an independent communication watchdog that disables motor output if valid commands from the Pi stop.
 
-\subsection{Communications and Data}
-The block diagram labels UART command/status between the Raspberry Pi and Arduino. Message format, baud rate, timing, error detection, and recovery behavior are TBD. The diagram also labels GPIO direction/PWM and encoder feedback at the drive controller; pin assignments and control-loop behavior require confirmation.
+\subsection{ROS 2 Software Architecture}
+The Pi software is organized as ROS 2 nodes with message topics between sensing, decision-making, and drive control. The initial architecture has the following responsibilities:
+\begin{itemize}
+    \item \textbf{LiDAR driver:} reads the selected LiDAR and publishes range data on \texttt{/scan} using \texttt{sensor\_msgs/msg/LaserScan}. The driver and topic configuration depend on the final sensor model.
+    \item \textbf{Camera driver:} reads the selected camera and publishes images, normally on \texttt{/image\_raw} using \texttt{sensor\_msgs/msg/Image}. Image processing and camera model remain to be specified.
+    \item \textbf{Motion source:} a future operator or navigation node publishes a body-velocity request on \texttt{/cmd\_vel} using \texttt{geometry\_msgs/msg/Twist}. No navigation algorithm or command source has been selected yet.
+    \item \textbf{Base interface:} a single ROS 2 node subscribes to \texttt{/cmd\_vel}, owns the Pi serial device, communicates with both Arduino nodes over RS-485, and publishes link/controller state on \texttt{/diagnostics} using \texttt{diagnostic\_msgs/msg/DiagnosticArray}. It also provides an explicit \texttt{/base/arm} service using \texttt{std\_srvs/srv/SetBool}.
+    \item \textbf{Arduino controllers:} receive addressed wheel targets, execute the local motor and encoder loops, and return controller state, encoder counts, and fault flags. They do not run ROS 2.
+\end{itemize}
 
-\subsection{Fault Handling and Validation}
-\textit{To be completed: define software fault detection, logging, operator alerts, safe-state behavior, and tests. No software validation results are recorded in the current repository.}
+The exact LiDAR and camera models, driver packages, transforms, navigation stack, and operator interface are TBD. The base interface must not publish odometry or transforms until wheel geometry, encoder scale, and coordinate conventions are established.
+
+\subsection{Pi-to-Arduino Control Flow}
+At startup, the base interface validates its serial and control parameters, opens the configured UART-to-RS-485 interface, and remains disarmed with zero motor demand. It performs a capability handshake with node 1 and then node 2, waiting for each addressed response before contacting the other. Once both nodes respond, the interface repeats a bounded command/status exchange for the nodes in sequence.
+
+When a fresh \texttt{/cmd\_vel} message is available and the operator has explicitly armed the base, the interface converts forward and angular velocity into left- and right-side wheel angular-speed targets. It maps those side targets to the four motor channels using the configured assignment order: motor 1 and motor 2 on the first Arduino, followed by motor 1 and motor 2 on the second. The physical layout is unknown, so the side assignment and wheel geometry must be reviewed against the actual chassis before motion is enabled. Mapping and motion permission default to disabled.
+
+The Pi sends each Arduino only the two targets assigned to that node. Each status reply provides the controller state, fault flags, last accepted command sequence, two encoder counts, and sample age. The base interface reports the per-node connection, data freshness, encoder, and fault information through ROS diagnostics. Encoder count units, sign convention, and wrap behavior must be agreed with the Arduino firmware before interpreting those values as odometry.
+
+\subsection{Shared RS-485 Bus and Candidate Protocol}
+The Pi is the sole bus master. Two Arduino transceivers share one half-duplex RS-485 pair, with proposed node IDs 1 and 2. The Pi initiates every transaction, addresses only one node, and waits for that node's response before polling the next; the unaddressed controller stays silent. This prevents simultaneous responses on the shared bus. The physical design must establish termination at both bus ends, suitable biasing, a signal reference, and transmit/receive direction control for the selected converter and transceivers \cite{ti_rs485}.
+
+The following bounded binary framing is the current protocol proposal for both Arduino implementations. It is not yet an agreed or hardware-verified interface.
+
+\begin{table}[!htbp]
+    \centering
+    \small
+    \renewcommand{\arraystretch}{1.25}
+    \begin{tabular}{p{3.2cm}p{9.8cm}}
+        \toprule
+        \textbf{Field} & \textbf{Proposed encoding and meaning} \\
+        \midrule
+        Synchronization & Two bytes, \texttt{A5 5A}. \\
+        Header & Protocol version (8 bit), source ID (8 bit), destination ID (8 bit), message type (8 bit), sequence (16 bit), payload length (8 bit). Multi-byte fields are big-endian. \\
+        Addressing & Pi ID 0; Arduino IDs 1 and 2. Broadcast is not used, and address 0 never replies. \\
+        Payload & Maximum 32 bytes. \texttt{HELLO} requests capabilities; \texttt{CYCLE} requests carry enable state and two signed motor targets in milli-radians/second. \\
+        Status & Controller state, fault mask, accepted sequence, motor 1 and motor 2 encoder counts, and sample age. Units and counter semantics require agreement with the Arduino firmware. \\
+        Integrity & CRC-16/CCITT-FALSE over the version-through-payload fields, excluding synchronization bytes. \\
+        \bottomrule
+    \end{tabular}
+    \caption{Candidate addressed RS-485 message format}
+\end{table}
+
+Replies must identify the source node and echo the request sequence. Receivers reject invalid versions, lengths, addresses, sequences, or CRC values and recover at the next valid synchronization marker. The proposed serial defaults are 115200 baud, a 10 Hz target cycle, a 40 ms response timeout, and no retry on a missed response. These are software starting values only; they must be checked against the selected hardware, bus timing, motor-control needs, and Arduino implementation. The interface treats a controller timeout as that node being offline and does not block polling the other node indefinitely.
+
+\subsection{Command Safety and Fault Handling}
+The control path starts disarmed. Motion is permitted only when the configured wheel mapping and motion permission are enabled, both controllers are healthy and reporting fresh status, a recent command is available, and an explicit arm request has been accepted. A stale command, controller fault, missing or stale controller, invalid communication, or serial-device failure clears the armed state and causes the Pi to request zero targets. Reconnection requires fresh status and a new arm request; motion must not resume automatically.
+
+The proposed command timeout is 250 ms and the maximum accepted status age is 500 ms. These limits are commissioning values, not validated safety limits. Each Arduino must independently stop its motors when its watchdog expires, because Pi software cannot guarantee a stop after a process crash, disconnected bus, or Pi power failure. The watchdog duration and safe motor state must be defined and verified at the controller level before motor power is enabled.
+
+\subsection{Implementation and Verification Status}
+This section records the intended Raspberry Pi software behavior and a candidate communications design. It is not evidence that ROS 2, the sensor drivers, the RS-485 link, or the motor-control system has been implemented or tested. The current repository contains a separate network-discovery utility at \texttt{tools/scan\_wifi\_devices.py}; its relationship to NaviBot's onboard software is unspecified. Before operation, confirm the Pi platform, sensor models, wheel and motor assignment, serial settings, adapter direction control, bus wiring, Arduino message handling, and watchdog behavior. Verify the protocol and stop behavior with the motor drive disabled before any powered motion test.

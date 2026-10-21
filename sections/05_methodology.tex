@@ -2,7 +2,7 @@
 \section{System Architecture \& Methodology}
 
 \subsection{System Architecture}
-The supplied block diagram depicts compute and sensing, motor control and drive, and power subsystems. Its component labels and signal paths are preliminary design inputs and require engineering review.
+The supplied block diagram is an earlier revision: it shows one Arduino and a UART link, while the project owner has confirmed two Arduino nodes on a shared RS-485 bus, each controlling two motors. Until the editable source and PNG are updated, treat the figure as a preliminary artifact that does not represent the current controller topology.
 
 \IfFileExists{figures/block_diagram.pdf}{
     \begin{figure}[!htbp]
@@ -41,10 +41,10 @@ The block diagram labels a nominal 11.1 V battery supply, a voltage-regulator/po
 
 \subsection{Subsystem Configuration}
 \subsubsection{Compute and Sensing}
-The diagram depicts a Raspberry Pi 4B (4 GB), LiDAR, and camera. Exact models, interfaces, mounting, data rates, and software are TBD.
+The diagram depicts a Raspberry Pi 4B (4 GB), LiDAR, and camera, connected to an Arduino by UART. The confirmed design uses an RS-485 converter at the Pi and a shared bus with two Arduino nodes. This suggests a high-level compute and sensing role for the Pi; exact models, interfaces, mounting, and data rates are TBD. The proposed ROS 2 software architecture and base-interface behavior are described in Section 6.
 
 \subsubsection{Controller and Drive System}
-The diagram depicts an Arduino, L298N dual H-bridge, and four DC motors with encoders. Confirm controller model, motor specifications, driver compatibility, encoder wiring, and control behavior.
+The intended control system has two Arduino nodes, each controlling two motors, on the shared RS-485 bus. The current diagram instead shows one Arduino linked to an L298N and four motors. The motor-driver allocation and encoder wiring for the two-controller arrangement need confirmation; update both the editable Draw.io source and its exported image when resolved.
 
 \subsubsection{Power Distribution}
 The diagram depicts an 11.1 V nominal Li-ion battery and voltage-regulator/power module. Cell configuration, capacity, regulator outputs, current limits, charging, protection, and runtime are TBD.
@@ -53,7 +53,7 @@ The diagram depicts an 11.1 V nominal Li-ion battery and voltage-regulator/power
 \textit{To be completed: document chassis, wheel layout, dimensions, mass, mounting, and operating limits.}
 
 \subsection{Software and Control Logic}
-The repository includes \texttt{tools/scan\_wifi\_devices.py}, a standalone best-effort IPv4/LAN discovery utility. Its connection to NaviBot's onboard software is not specified. Describe the navigation, sensing, control, communications, and fault-handling architecture after the project workflow is confirmed.
+The repository includes \texttt{tools/scan\_wifi\_devices.py}, a standalone best-effort IPv4/LAN discovery utility. Its connection to NaviBot's onboard software is not specified. The proposed Raspberry Pi sensing, ROS 2 control, RS-485 communications, and fault-handling architecture is described in Section 6; navigation behavior remains to be defined after the project workflow is confirmed.
 
 \subsection{Pseudocode / Algorithm}
 The system algorithm depends on the as-yet unspecified intended task and navigation method. Replace this outline when requirements and control behavior are established.

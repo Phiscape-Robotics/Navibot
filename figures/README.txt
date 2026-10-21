@@ -1,5 +1,10 @@
 FIGURES FOLDER
 
+Architecture status: the current block diagram is an earlier revision and shows
+one Arduino with a direct UART link. The confirmed project architecture uses
+two Arduino motor-controller nodes on a shared RS-485 bus. Update the Draw.io
+source and exported image together before treating this figure as current.
+
 Keep editable draw.io diagram source files here, for example:
 - block_diagram.drawio
 - circuit_diagram.drawio
