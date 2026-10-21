@@ -2,59 +2,200 @@
 \section{Software Design \& Processing}
 
 \subsection{Raspberry Pi Role and Platform}
-The Raspberry Pi 4B (4 GB) is the planned high-level compute and sensing unit. The proposed software platform is ROS 2 Lyrical Luth on 64-bit Ubuntu 26.04 LTS for arm64. ROS 2 lists arm64 Ubuntu 26.04 as a Tier 1 platform, and Ubuntu provides Raspberry Pi images for this release \cite{ros_lyrical_platforms,ubuntu_raspberry_pi}. The actual Pi model, operating system, storage, and power arrangement must be confirmed before deployment.
+The Raspberry Pi 4B (4 GB) is the planned high-level compute and sensing unit. The proposed software platform is ROS 2 Lyrical Luth on 64-bit Ubuntu 26.04 LTS for arm64. ROS 2 lists arm64 Ubuntu 26.04 as a Tier 1 platform, and Ubuntu provides Raspberry Pi images for this release \cite{ros_lyrical_platforms,ubuntu_raspberry_pi}. Confirm the final operating-system image, storage, and power arrangement before deployment.
 
 The Pi handles sensor drivers, high-level behavior, and communication with the motor controllers. It does not perform the motor-level control loop. Each Arduino remains responsible for its two motors, encoder acquisition, and an independent communication watchdog that disables motor output if valid commands from the Pi stop.
 
 \subsection{ROS 2 Software Architecture}
 The Pi software is organized as ROS 2 nodes with message topics between sensing, decision-making, and drive control. The initial architecture has the following responsibilities:
 \begin{itemize}
-    \item \textbf{LiDAR driver:} reads the selected LiDAR and publishes range data on \texttt{/scan} using \texttt{sensor\_msgs/msg/LaserScan}. The driver and topic configuration depend on the final sensor model.
-    \item \textbf{Camera driver:} reads the selected camera and publishes images, normally on \texttt{/image\_raw} using \texttt{sensor\_msgs/msg/Image}. Image processing and camera model remain to be specified.
-    \item \textbf{Motion source:} a future operator or navigation node publishes a body-velocity request on \texttt{/cmd\_vel} using \texttt{geometry\_msgs/msg/Twist}. No navigation algorithm or command source has been selected yet.
-    \item \textbf{Base interface:} a single ROS 2 node subscribes to \texttt{/cmd\_vel}, owns the Pi serial device, communicates with both Arduino nodes over RS-485, and publishes link/controller state on \texttt{/diagnostics} using \texttt{diagnostic\_msgs/msg/DiagnosticArray}. It also provides an explicit \texttt{/base/arm} service using \texttt{std\_srvs/srv/SetBool}.
-    \item \textbf{Arduino controllers:} receive addressed wheel targets, execute the local motor and encoder loops, and return controller state, encoder counts, and fault flags. They do not run ROS 2.
+    \item \textbf{LiDAR driver:} the YDLIDAR X2 serial unit uses the manufacturer's ROS 2 driver and publishes scans on \texttt{/scan} as \texttt{sensor\_msgs/msg/LaserScan}; mounting alignment and scan performance remain to be verified on the robot.
+    \item \textbf{Camera driver:} the Raspberry Pi Camera Module V2 (IMX219) is brought up with the upstream ROS 2 \texttt{camera\_ros} node. It publishes \texttt{/camera/image\_raw} and \texttt{/camera/camera\_info}. The verified output is 640 by 480 pixels in \texttt{bgr8}; calibration and the robot-to-camera transform remain deployment requirements.
+    \item \textbf{Motion source:} an operator, teleoperation, or future navigation node publishes four signed wheel RPM targets on \texttt{/motor\_bridge/target\_rpm}. The current bridge is a wheel-level interface, not a \texttt{cmd\_vel} or odometry interface.
+    \item \textbf{Motor bridge:} the ROS 2 \texttt{navibot\_motor\_bridge} node owns one USB-to-RS-485 adapter, polls the front and rear controllers sequentially, validates feedback, and publishes wheel measurements and bridge status.
+    \item \textbf{Arduino controllers:} two classic Arduino Nano nodes control the front and rear motor pairs. Each runs its local speed PI controllers, acquires encoder feedback, and enforces a command watchdog. The Nanos do not run ROS 2.
 \end{itemize}
 
-The exact LiDAR and camera models, driver packages, transforms, navigation stack, and operator interface are TBD. The base interface must not publish odometry or transforms until wheel geometry, encoder scale, and coordinate conventions are established.
+The YDLIDAR X2 model and ROS 2 driver are identified. Its robot mounting transform, scan alignment, and measurement accuracy still need physical verification. Camera calibration, camera mounting transform, navigation stack, and operator interface remain to be specified. Wheel diameter, track width, and steering geometry are still needed before adding a body-velocity (\texttt{cmd\_vel}) or odometry interface.
 
-\subsection{Pi-to-Arduino Control Flow}
-At startup, the base interface validates its serial and control parameters, opens the configured UART-to-RS-485 interface, and remains disarmed with zero motor demand. It performs a capability handshake with node 1 and then node 2, waiting for each addressed response before contacting the other. Once both nodes respond, the interface repeats a bounded command/status exchange for the nodes in sequence.
+\subsection{Pi Camera V2 Bring-up}
+The Pi Camera V2 (IMX219) uses the upstream \texttt{camera\_ros} node \cite{camera_ros}. The launch configuration requests 640 by 480 output at approximately 15 frames per second and selects the 1640 by 1232 sensor mode to avoid using a cropped VGA sensor mode. Requested stream settings are not guaranteed: the camera driver may adjust unsupported values, so the actual startup log and resulting image dimensions must be checked on the sensor in use.
 
-When a fresh \texttt{/cmd\_vel} message is available and the operator has explicitly armed the base, the interface converts forward and angular velocity into left- and right-side wheel angular-speed targets. It maps those side targets to the four motor channels using the configured assignment order: motor 1 and motor 2 on the first Arduino, followed by motor 1 and motor 2 on the second. The physical layout is unknown, so the side assignment and wheel geometry must be reviewed against the actual chassis before motion is enabled. Mapping and motion permission default to disabled.
+On the configured Pi, bring up the camera with the following environment and launch command:
+\begin{lstlisting}[language=bash]
+~/setup-camera.sh
+source /opt/ros/lyrical/setup.bash
+source ~/ros2_ws/install/setup.bash
+ros2 launch navibot_camera camera.launch.py
+\end{lstlisting}
 
-The Pi sends each Arduino only the two targets assigned to that node. Each status reply provides the controller state, fault flags, last accepted command sequence, two encoder counts, and sample age. The base interface reports the per-node connection, data freshness, encoder, and fault information through ROS diagnostics. Encoder count units, sign convention, and wrap behavior must be agreed with the Arduino firmware before interpreting those values as odometry.
+The node publishes \texttt{/camera/image\_raw} and \texttt{/camera/camera\_info}. Both use the image frame \texttt{camera\_optical\_frame}, with axes x right, y down, and z forward. The transform from this optical frame to the robot frame must be calculated from the measured camera mounting position and orientation; it is not supplied by the camera package and must not be guessed.
 
-\subsection{Shared RS-485 Bus and Candidate Protocol}
-The Pi is the sole bus master. Two Arduino transceivers share one half-duplex RS-485 pair, with proposed node IDs 1 and 2. The Pi initiates every transaction, addresses only one node, and waits for that node's response before polling the next; the unaddressed controller stays silent. This prevents simultaneous responses on the shared bus. The physical design must establish termination at both bus ends, suitable biasing, a signal reference, and transmit/receive direction control for the selected converter and transceivers \cite{ti_rs485}.
+The camera starts uncalibrated. Supply measured calibration data through the launch argument:
+\begin{lstlisting}[language=bash]
+ros2 launch navibot_camera camera.launch.py camera_info_url:=file:///absolute/path/calibration.yaml
+\end{lstlisting}
+Do not use zero-initialized camera intrinsics for geometry or image rectification. Image compression is available only if a compatible \texttt{image\_transport} plugin is installed; compressed topics are not guaranteed by this package.
 
-The following bounded binary framing is the current protocol proposal for both Arduino implementations. It is not yet an agreed or hardware-verified interface.
-
+\subsubsection{Camera configuration}
+The Pi deployment uses \texttt{config/camera.yaml}. The following settings are its current defaults:
 \begin{table}[!htbp]
     \centering
     \small
-    \renewcommand{\arraystretch}{1.25}
-    \begin{tabular}{p{3.2cm}p{9.8cm}}
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{p{4.2cm}p{3.2cm}p{7.5cm}}
         \toprule
-        \textbf{Field} & \textbf{Proposed encoding and meaning} \\
+        \textbf{Parameter} & \textbf{Default} & \textbf{Purpose} \\
         \midrule
-        Synchronization & Two bytes, \texttt{A5 5A}. \\
-        Header & Protocol version (8 bit), source ID (8 bit), destination ID (8 bit), message type (8 bit), sequence (16 bit), payload length (8 bit). Multi-byte fields are big-endian. \\
-        Addressing & Pi ID 0; Arduino IDs 1 and 2. Broadcast is not used, and address 0 never replies. \\
-        Payload & Maximum 32 bytes. \texttt{HELLO} requests capabilities; \texttt{CYCLE} requests carry enable state and two signed motor targets in milli-radians/second. \\
-        Status & Controller state, fault mask, accepted sequence, motor 1 and motor 2 encoder counts, and sample age. Units and counter semantics require agreement with the Arduino firmware. \\
-        Integrity & CRC-16/CCITT-FALSE over the version-through-payload fields, excluding synchronization bytes. \\
+        \texttt{camera} & \texttt{0} & First camera detected by libcamera. \\
+        \texttt{role} & \texttt{video} & Video stream configuration. \\
+        \texttt{format} & \texttt{RGB888} & Requested color pixel format; ROS output is verified as \texttt{bgr8}. \\
+        \texttt{width}, \texttt{height} & \texttt{640}, \texttt{480} & Requested output dimensions. \\
+        \texttt{sensor\_mode} & \texttt{1640:1232} & Selected binned sensor mode. \\
+        \texttt{FrameDurationLimits} & \texttt{[66667, 66667]} & Frame duration in microseconds, approximately 15 FPS. \\
+        \texttt{orientation} & \texttt{0} & Camera rotation in degrees. \\
+        \texttt{frame\_id} & \texttt{camera\_optical\_frame} & Frame assigned to image and CameraInfo messages. \\
         \bottomrule
     \end{tabular}
-    \caption{Candidate addressed RS-485 message format}
+    \caption{Pi Camera V2 launch configuration}
 \end{table}
 
-Replies must identify the source node and echo the request sequence. Receivers reject invalid versions, lengths, addresses, sequences, or CRC values and recover at the next valid synchronization marker. The proposed serial defaults are 115200 baud, a 10 Hz target cycle, a 40 ms response timeout, and no retry on a missed response. These are software starting values only; they must be checked against the selected hardware, bus timing, motor-control needs, and Arduino implementation. The interface treats a controller timeout as that node being offline and does not block polling the other node indefinitely.
+A separate configuration file can be selected at launch:
+\begin{lstlisting}[language=bash]
+ros2 launch navibot_camera camera.launch.py config:=/absolute/path/camera.yaml
+\end{lstlisting}
 
-\subsection{Command Safety and Fault Handling}
-The control path starts disarmed. Motion is permitted only when the configured wheel mapping and motion permission are enabled, both controllers are healthy and reporting fresh status, a recent command is available, and an explicit arm request has been accepted. A stale command, controller fault, missing or stale controller, invalid communication, or serial-device failure clears the armed state and causes the Pi to request zero targets. Reconnection requires fresh status and a new arm request; motion must not resume automatically.
+\subsubsection{Pi 4 libcamera runtime workaround}
+On the validated Pi 4 installation, ROS libcamera 0.7.2 enumerates the camera but its isolated IPA helper aborts with \texttt{A list of V4L2 controls requires a ControlInfoMap}. Standalone capture and ROS streaming work with Ubuntu libcamera 0.7.0. For this installation, the launch file preloads Ubuntu's matching libcamera libraries and selects the corresponding IPA modules and proxy, scoped to the camera process and its children. Both package versions remain installed; no global library paths are changed. This workaround is specific to this Ubuntu ARM64 installation and must be reviewed after libcamera upgrades.
 
-The proposed command timeout is 250 ms and the maximum accepted status age is 500 ms. These limits are commissioning values, not validated safety limits. Each Arduino must independently stop its motors when its watchdog expires, because Pi software cannot guarantee a stop after a process crash, disconnected bus, or Pi power failure. The watchdog duration and safe motor state must be defined and verified at the controller level before motor power is enabled.
+If the camera is not detected, \texttt{cam -l} should list the IMX219. Devices such as \texttt{/dev/video10} alone may be ISP or codec interfaces and do not establish that a sensor is connected. The current boot configuration has \texttt{camera\_auto\_detect=1}. Before inspecting the CSI connection, shut the Pi down and disconnect power; do not reconnect the ribbon cable while powered. Reboot and check \texttt{cam -l} after reseating the cable.
 
-\subsection{Implementation and Verification Status}
-This section records the intended Raspberry Pi software behavior and a candidate communications design. It is not evidence that ROS 2, the sensor drivers, the RS-485 link, or the motor-control system has been implemented or tested. The current repository contains a separate network-discovery utility at \texttt{tools/scan\_wifi\_devices.py}; its relationship to NaviBot's onboard software is unspecified. Before operation, confirm the Pi platform, sensor models, wheel and motor assignment, serial settings, adapter direction control, bus wiring, Arduino message handling, and watchdog behavior. Verify the protocol and stop behavior with the motor drive disabled before any powered motion test.
+\subsubsection{Camera verification and limits}
+Streaming can be checked from a second terminal after sourcing both ROS environments:
+\begin{lstlisting}[language=bash]
+ros2 topic hz /camera/image_raw --qos-reliability best_effort
+ros2 topic echo /camera/camera_info --once --qos-reliability best_effort
+\end{lstlisting}
+The saved launch configuration has delivered 60 image messages and 60 CameraInfo messages at approximately 15 FPS on the Pi. The verified image encoding is \texttt{bgr8}, 640 by 480, with 921600 bytes per frame. CameraInfo remains uncalibrated; zero dimensions and intrinsics are expected until calibration data is supplied. A stream-adjustment warning is acceptable only when the resulting dimensions and encoding match the intended output. A successful build by itself does not validate the external \texttt{camera\_ros} executable, libcamera compatibility, physical sensor, stream, or calibration.
+
+For a graphical preview, run \texttt{rqt\_image\_view} on a computer with ROS 2 and a desktop, then select \texttt{/camera/image\_raw}. Remote viewing requires working ROS discovery and matching \texttt{ROS\_DOMAIN\_ID} values between the computer and Pi. A remote terminal does not itself provide a graphical display; this camera setup does not include a browser-based viewer.
+
+\subsection{Motor Bridge and Wheel Interfaces}
+The Pi runs the ROS 2 package \texttt{navibot\_motor\_bridge} as the RS-485 bus master. It communicates through a USB-to-RS-485 adapter with two classic Arduino Nano controllers: the front Nano has address 1 and controls front-left/front-right; the rear Nano has address 2 and controls rear-left/rear-right. Both Nanos perform their own wheel-speed PI control locally. The serial link carries target RPM and returns measured RPM, applied duty, status flags, and sample timing under the firmware contract in \texttt{PROTOCOL.md}. That firmware contract is maintained outside this design-document repository; the Arduino firmware itself is not included here.
+
+The bus is half-duplex and the bridge polls one Nano at a time. Termination, biasing, signal reference, and adapter turnaround must be verified against the selected transceiver and USB adapter before physical operation \cite{ti_rs485}.
+
+The target ROS message is \texttt{std\_msgs/msg/Float64MultiArray} on \texttt{/motor\_bridge/target\_rpm}, ordered front-left, front-right, rear-left, rear-right. Values are signed RPM, initially limited to $\pm135$ RPM. The publisher must send targets repeatedly; a command expires after 250 ms. Invalid target arrays request zero. The feedback topics are \texttt{/motor\_bridge/wheel\_rpm} and \texttt{/motor\_bridge/wheel\_duty}, also ordered by wheel. Disconnected or stale measurements are reported as NaN. Duty is a signed percentage from $-100$ to $+100$. The \texttt{/motor\_bridge/status} topic is a \texttt{std\_msgs/msg/String} that reports feedback freshness, Nano status flags, and sample times.
+
+The bus uses 115200 baud, 8N1, with front/rear addresses 1 and 2. Its configured poll rate is 50 transactions per second total, yielding feedback from each Nano at approximately 25 Hz; ROS feedback topics publish at 5 Hz. Each wheel value is the latest received value from its controller. Since the two Nanos are polled independently, a four-wheel message is not a synchronized snapshot. The interface does not yet convert \texttt{cmd\_vel} to wheel commands or calculate odometry; wheel diameter, track width, and steering geometry are not yet defined.
+
+\subsubsection{Build and launch}
+On the Pi, the bridge is built in the ROS workspace and launched with the USB adapter selected explicitly:
+\begin{lstlisting}[language=bash]
+source /opt/ros/lyrical/setup.bash
+cd ~/ros2_ws
+colcon build --symlink-install --packages-select navibot_motor_bridge
+source install/setup.bash
+ls -l /dev/serial/by-id/
+ros2 launch navibot_motor_bridge motors.launch.py port:=/dev/serial/by-id/YOUR_ADAPTER
+\end{lstlisting}
+The default device is \texttt{/dev/ttyUSB0}; a \texttt{/dev/serial/by-id/} path is preferred because device numbering may change, especially when a USB LiDAR is also connected. The Pi account is already a member of \texttt{dialout}; the required \texttt{python3-serial} dependency is installed on the Pi. Only one process may own the adapter at a time. Automatic RS-485 transmit/receive turnaround must be confirmed for the actual USB adapter. This package does not configure a GPIO/MAX485 interface.
+
+Defaults are stored on the Pi in \texttt{config/motors.yaml}:
+\begin{table}[!htbp]
+    \centering
+    \small
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{p{4.2cm}p{3.1cm}p{7.5cm}}
+        \toprule
+        \textbf{Parameter} & \textbf{Default} & \textbf{Purpose} \\
+        \midrule
+        \texttt{port} & \texttt{/dev/ttyUSB0} & USB adapter path; can be overridden at launch. \\
+        \texttt{baudrate} & \texttt{115200} & Bus speed, 8N1. \\
+        \texttt{front\_address}, \texttt{rear\_address} & \texttt{1}, \texttt{2} & Front and rear Nano addresses. \\
+        \texttt{poll\_rate} & \texttt{50.0} & Total bus transactions per second. \\
+        \texttt{reply\_timeout} & \texttt{0.012} s & Response deadline; must be less than the poll interval. \\
+        \texttt{command\_timeout} & \texttt{0.25} s & Maximum age of a ROS target command. \\
+        \texttt{feedback\_timeout} & \texttt{0.25} s & Maximum age of Nano feedback. \\
+        \texttt{max\_rpm} & \texttt{135.0} & Maximum absolute wheel RPM target. \\
+        \bottomrule
+    \end{tabular}
+    \caption{Motor bridge configuration defaults}
+\end{table}
+
+\subsection{Motor Bridge Safety and Fault Handling}
+The bridge opens the port exclusively, starts with zero targets, and retries an unavailable adapter every two seconds. It accepts nonzero targets only when both controllers have fresh feedback and neither reports RPM-invalid or controller-fault flags. If communication health is lost, targets are inhibited until the health checks pass again and a fresh ROS target command arrives. Stop packets are attempted during orderly shutdown, but packet delivery cannot be relied upon after Pi, cable, or adapter failure. Each Nano must independently force PWM off after 250 ms without a valid addressed command.
+
+For an initial motor test, all four wheels must be lifted clear and a motor-power stop must be available. Test only after the two Nanos implement the same protocol and watchdog in \texttt{PROTOCOL.md}. Do not run another serial application against the adapter concurrently.
+
+The ROS status topic can be inspected in one sourced terminal while a brief low-speed command is published from another:
+\begin{lstlisting}[language=bash]
+ros2 topic echo /motor_bridge/status
+ros2 topic pub -r 10 /motor_bridge/target_rpm std_msgs/msg/Float64MultiArray '{data: [10.0, 10.0, 10.0, 10.0]}'
+\end{lstlisting}
+Stop the publisher with Ctrl-C; the bridge lets the command expire and requests zero targets. This procedure is only for the controlled, wheels-raised test described above.
+
+\paragraph{Troubleshooting.}
+For a missing device, check \texttt{/dev/serial/by-id/} and \texttt{/dev/ttyUSB*}; for permission errors, check \texttt{dialout} membership and start a new login after group changes. Do not make the device world-writable. A busy port indicates another serial process must be stopped. NaN feedback or stale status calls for checking Nano addresses, firmware, baud rate, wiring, CRC handling, and adapter direction switching. Zero targets call for checking the four-element order, RPM bounds, repeated publication, and both Nano status flags.
+
+\subsection{YDLIDAR X2 Bring-up}
+The serial YDLIDAR X2 is brought up on the Pi with the manufacturer's ROS 2 driver and YDLIDAR SDK \cite{ydlidar_ros2,ydlidar_sdk}. The SDK is installed locally under \texttt{\textasciitilde/.local/ydlidar\_sdk}; this setup does not require a system-wide SDK installation. The Pi workspace has compatibility changes for CMake 4 and ROS 2 Lyrical (including C++17 and ament target linkage). The validated source revisions and patch scope are recorded below; these sources and local patches are maintained in the Pi workspace, not this design-document repository.
+
+Start the driver in a sourced ROS environment:
+\begin{lstlisting}[language=bash]
+~/setup-lidar.sh
+source /opt/ros/lyrical/setup.bash
+source ~/ros2_ws/install/setup.bash
+ros2 launch navibot_lidar lidar.launch.py
+\end{lstlisting}
+
+The LiDAR adapter currently appears at \texttt{/dev/serial/by-id/usb-Silicon\_Labs\_CP2102\_USB\_to\_UART\_Bridge\_Controller\_0001-if00-port0}. Use that stable path where available. The launch argument \texttt{port} overrides the YAML value, for example \texttt{port:=/dev/ttyUSB1}. Do not assign the LiDAR's serial port to the motor bridge: the motor bridge requires its separate USB-RS-485 adapter. If identical CP2102 adapters report duplicate serial identifiers, select the LiDAR by its \texttt{/dev/serial/by-path/} path or define a udev rule. Only one process can own a serial device at a time.
+
+\subsubsection{Driver configuration}
+The Pi configuration is \texttt{config/x2.yaml}; a different file can be selected with \texttt{config:=/absolute/path/x2.yaml}. The launch-time \texttt{port} argument takes precedence over the port in that file. The current settings are:
+\begin{table}[!htbp]
+    \centering
+    \small
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{p{4.2cm}p{3.2cm}p{7.5cm}}
+        \toprule
+        \textbf{Parameter} & \textbf{Default} & \textbf{Purpose} \\
+        \midrule
+        \texttt{baudrate} & \texttt{115200} & Serial communication speed. \\
+        \texttt{lidar\_type} & \texttt{1} & Triangulation-class sensor setting. \\
+        \texttt{device\_type} & \texttt{0} & Serial device. \\
+        \texttt{isSingleChannel} & \texttt{true} & Single-channel X2 mode. \\
+        \texttt{sample\_rate} & \texttt{3} kHz & Configured sample rate. \\
+        \texttt{range\_min}, \texttt{range\_max} & \texttt{0.1}, \texttt{8.0} m & Published scan range limits. \\
+        \texttt{angle\_min}, \texttt{angle\_max} & \texttt{-180}, \texttt{180} deg & Configured scan angle span. \\
+        \texttt{frequency} & \texttt{6.0} Hz & Requested scan frequency; actual rate depends on motor speed and hardware. \\
+        \texttt{frame\_id} & \texttt{laser\_frame} & Frame assigned to the scan. \\
+        \texttt{support\_motor\_dtr} & \texttt{true} & Enables the driver's motor DTR control. \\
+        \texttt{invalid\_range\_is\_inf} & \texttt{true} & Represents invalid ranges as infinity. \\
+        \bottomrule
+    \end{tabular}
+    \caption{Current YDLIDAR X2 driver settings on the Pi}
+\end{table}
+
+\subsubsection{Topics, operation, and verification}
+The driver publishes \texttt{/scan} as \texttt{sensor\_msgs/msg/LaserScan} with SensorDataQoS (best effort), and \texttt{/point\_cloud} as \texttt{sensor\_msgs/msg/PointCloud}. The \texttt{/start\_scan} and \texttt{/stop\_scan} services use \texttt{std\_srvs/srv/Empty}. Check live scan output with:
+\begin{lstlisting}[language=bash]
+ros2 topic hz /scan --qos-reliability best_effort
+ros2 topic echo /scan --once --qos-reliability best_effort
+\end{lstlisting}
+For visualization in RViz, set the fixed frame to \texttt{laser\_frame} and use best-effort QoS. A remote terminal alone does not provide a graphical display. The transform from \texttt{base\_link} to \texttt{laser\_frame} must be calculated from measured mounting geometry; this driver does not publish a guessed robot transform. Check forward-angle alignment against stationary objects after mounting.
+
+\subsubsection{Driver revisions and validation}
+The Pi workspace uses YDLIDAR SDK commit \texttt{42a82ed10d2304094c111fc63dee8e4a229b79b7} and the \texttt{humble} branch of \texttt{ydlidar\_ros2\_driver} at commit \texttt{4ef70d3f32a85704ade0be54b214f3763b1ab3e8}. The driver settings follow the manufacturer's configuration reference \cite{ydlidar_config}. Both packages built on the Pi under ROS 2 Lyrical after the local compatibility patches. In a bounded live capture, 30 scans arrived at approximately 11.58 Hz with 260 samples per scan; the last scan contained 177 finite in-range returns from 0.195 m to 7.155 m, with frame \texttt{laser\_frame} and configured limits of 0.1--8.0 m. This confirms streaming on that setup, not ranging accuracy or calibration. The measured scan rate exceeded the requested 6 Hz; actual rate depends on the sensor motor and hardware, so the requested frequency must not be treated as a guaranteed output rate.
+
+During initialization the SDK logged \texttt{Fail to get baseplate device information!}, followed by successful initialization and scan streaming. The warning did not prevent that capture; investigate it if scan startup or continuity fails. If the adapter is missing, inspect \texttt{/dev/serial/by-id/} and \texttt{/dev/serial/by-path/}. For permission errors, check \texttt{dialout} membership (the Pi's \texttt{rpi} account is already a member). If scans are absent, check exclusive port ownership, sensor rotation, baud rate, and single-channel configuration. Compare stationary objects at known distances to investigate unexpected ranges or angles. The robot transform, forward-angle alignment, and measurement accuracy remain unverified.
+
+\subsection{Pi Software Validation Status}
+The motor bridge's protocol and pseudo-terminal integration tests have passed with two simulated Nanos, covering signed commands to both addresses, fragmented replies, bad checksums, wrong sequences, command expiry, feedback loss and recovery, and shutdown zero commands. The installed launch command was checked with the adapter absent. These results validate software behavior only: USB-RS-485 turnaround, bus wiring, Nano firmware, encoder calibration, and physical motor response have not been validated. The camera streaming results are recorded in the camera subsection above. The repository's \texttt{tools/scan\_wifi\_devices.py} remains a separate network-discovery utility; its role in the robot is unspecified.
+
+The integration suite can be rerun in the Pi workspace with:
+\begin{lstlisting}[language=bash]
+source /opt/ros/lyrical/setup.bash
+cd ~/ros2_ws/src/navibot_motor_bridge
+python3 -m unittest discover -s test -v
+\end{lstlisting}

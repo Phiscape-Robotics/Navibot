@@ -2,7 +2,7 @@
 \section{System Architecture \& Methodology}
 
 \subsection{System Architecture}
-The supplied block diagram is an earlier revision: it shows one Arduino and a UART link, while the project owner has confirmed two Arduino nodes on a shared RS-485 bus, each controlling two motors. Until the editable source and PNG are updated, treat the figure as a preliminary artifact that does not represent the current controller topology.
+The supplied block diagram is an earlier revision: it shows one Arduino and a direct UART link, while the project owner has confirmed front and rear Arduino Nano nodes on a shared USB-RS-485 bus, each controlling two motors. Until the editable source and PNG are updated, treat the figure as a preliminary artifact that does not represent the current controller topology.
 
 \IfFileExists{figures/block_diagram.pdf}{
     \begin{figure}[!htbp]
@@ -41,10 +41,10 @@ The block diagram labels a nominal 11.1 V battery supply, a voltage-regulator/po
 
 \subsection{Subsystem Configuration}
 \subsubsection{Compute and Sensing}
-The diagram depicts a Raspberry Pi 4B (4 GB), LiDAR, and camera, connected to an Arduino by UART. The confirmed design uses an RS-485 converter at the Pi and a shared bus with two Arduino nodes. This suggests a high-level compute and sensing role for the Pi; exact models, interfaces, mounting, and data rates are TBD. The proposed ROS 2 software architecture and base-interface behavior are described in Section 6.
+The diagram depicts a Raspberry Pi 4B (4 GB), LiDAR, and camera, connected to an Arduino by UART. The confirmed design uses a USB-RS-485 adapter at the Pi and a shared bus with front and rear Arduino Nano nodes; the camera model is Pi Camera V2 (IMX219), and the serial LiDAR is a YDLIDAR X2. The ROS 2 driver has streamed scans on the Pi; mounting transform, forward-angle alignment, and ranging accuracy remain to be verified. The ROS 2 motor-bridge interfaces, camera bring-up, and sensor details are described in Section 6.
 
 \subsubsection{Controller and Drive System}
-The intended control system has two Arduino nodes, each controlling two motors, on the shared RS-485 bus. The current diagram instead shows one Arduino linked to an L298N and four motors. The motor-driver allocation and encoder wiring for the two-controller arrangement need confirmation; update both the editable Draw.io source and its exported image when resolved.
+The intended control system has two classic Arduino Nano nodes, one controlling the front-left/front-right motors and one controlling the rear-left/rear-right motors, on the shared RS-485 bus. The current diagram instead shows one Arduino linked to an L298N and four motors. The motor-driver allocation and encoder wiring for the two-controller arrangement need confirmation; update both the editable Draw.io source and its exported image when resolved.
 
 \subsubsection{Power Distribution}
 The diagram depicts an 11.1 V nominal Li-ion battery and voltage-regulator/power module. Cell configuration, capacity, regulator outputs, current limits, charging, protection, and runtime are TBD.

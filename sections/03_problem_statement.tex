@@ -5,7 +5,7 @@
 The engineering problem has not yet been supplied. Define the task NaviBot must perform, the environment and users it serves, and the current limitation the design is intended to address. The project name and component diagram alone do not establish these requirements.
 
 \subsection{Known Design Inputs}
-The repository diagram depicts an 11.1 V nominal Li-ion battery, Raspberry Pi 4B, LiDAR, camera, one Arduino, an L298N dual H-bridge, and four DC motors with encoders. The project owner has clarified that the intended control system has two Arduinos, each controlling two motors, connected to the Pi on a shared RS-485 bus. The diagram does not yet reflect that update. Component models, motor-driver allocation, transceivers, ratings, compatibility, and realized configuration require confirmation.
+The repository diagram depicts an 11.1 V nominal Li-ion battery, Raspberry Pi 4B, LiDAR, camera, one Arduino, an L298N dual H-bridge, and four DC motors with encoders. The project owner has identified a serial YDLIDAR X2 and Pi Camera V2 (IMX219), and clarified that the motor system uses two classic Arduino Nano nodes, front and rear, each controlling two motors over a shared USB-RS-485 bus. The diagram does not yet reflect those updates. Remaining component details, motor-driver allocation, transceivers, ratings, compatibility, and realized configuration require confirmation.
 
 \subsection{Constraints and Verification}
 \begin{table}[!htbp]
@@ -19,8 +19,8 @@ The repository diagram depicts an 11.1 V nominal Li-ion battery, Raspberry Pi 4B
         Operating environment & TBD & Define surfaces, lighting, obstacles, and environmental limits. \\
         Motion and navigation & TBD & Define speed, range, accuracy, and acceptance tests as applicable. \\
         Electrical and power & Diagram shows nominal 11.1 V battery; detailed ratings TBD & Verify loads, rail voltages, current, protection, and runtime. \\
-        Computing and sensing & Pi 4B, LiDAR, and camera are depicted & Confirm models, interfaces, timing, and software requirements. \\
-        RS-485 control bus & Two Arduino nodes confirmed; node IDs 1 and 2 proposed in the draft protocol & Confirm converter direction control, serial settings, signal reference, termination, node firmware, and error handling. \\
+        Computing and sensing & Pi 4B, YDLIDAR X2, and Pi Camera V2 are identified & Verify sensor mounting, transforms, calibration, timing, and performance. \\
+        RS-485 control bus & USB adapter to front/rear Nano nodes; addresses 1 and 2 configured & Confirm adapter turnaround, bus wiring, signal reference, termination, and physical communication. \\
         Safety and operation & TBD & Identify hazards, safe behavior, and operating limits. \\
         Cost and procurement & TBD & Establish budget and selected part numbers. \\
         \bottomrule

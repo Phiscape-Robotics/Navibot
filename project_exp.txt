@@ -4,19 +4,21 @@ Confirmed project inputs and repository artifacts
 - A Draw.io electronics block diagram and a PNG export are present.
 - The diagram depicts a Raspberry Pi 4B, LiDAR, camera, Arduino, L298N dual H-bridge, four DC motors with encoders, an 11.1 V nominal Li-ion battery, and a voltage-regulator/power module.
 - The diagram labels UART command/status between the Pi and Arduino, GPIO direction/PWM between the Arduino and motor driver, encoder feedback, and power connections.
+- The project uses a Raspberry Pi Camera V2 (IMX219). Its ROS 2 camera_ros setup has been verified on the Pi at 640x480 bgr8 and approximately 15 FPS; calibration remains pending.
+- The serial YDLIDAR X2 uses the manufacturer's ROS 2 driver and SDK. Both built on the Pi under ROS 2 Lyrical; a bounded capture produced 30 scans at approximately 11.58 Hz with 260 samples per scan. Physical mounting transform, forward-angle alignment, and ranging accuracy remain unverified.
 - The Python script tools/scan_wifi_devices.py performs best-effort IPv4 device discovery on the connected local Wi-Fi/LAN using host network information, ping, and ARP/neighbour data.
-- The project owner confirms two Arduino motor-controller nodes, each controlling two motors, on one shared RS-485 bus connected to the Pi through a UART-to-RS-485 converter.
+- The project owner confirms a front and rear classic Arduino Nano, each controlling two motors, on a shared USB-RS-485 bus connected to the Pi.
 
 Not established by the available files
 - NaviBot's intended task, users, operating environment, and autonomy level.
 - Whether tools/scan_wifi_devices.py is part of NaviBot's runtime or a development utility.
 - Exact model numbers and electrical requirements for most components, wiring/pin assignments, dimensions, performance targets, budget, safety provisions, test results, and validation criteria.
 - Whether the diagram's depicted component choices and connections have been built or verified.
-- Exact converter/transceiver models, motor-driver allocation, serial settings, and confirmed node addresses.
+- Exact USB adapter/transceiver models, motor-driver allocation, and physical bus verification.
 
 Current Raspberry Pi design status
 - ROS 2 Lyrical Luth on 64-bit Ubuntu 26.04 LTS arm64 is the proposed Pi runtime; verify the actual Pi board and operating system.
-- The main design document, Section 6, describes the proposed ROS 2 node architecture, Pi-to-Arduino control flow, candidate binary RS-485 protocol, and safe-state behavior.
-- No ROS 2 software has been confirmed as deployed on the physical Pi or validated against the Arduino firmware and hardware. Node IDs 1 and 2, protocol details, motor mapping, and serial settings remain proposals. Do not enable motor output until both Arduino implementations match the protocol and the watchdog/stop behavior is reviewed.
+- The main design document, Section 6, records the deployed ROS 2 motor-bridge package, wheel-level ROS topics, Pi Camera V2 bring-up, YDLIDAR X2 bring-up, and the external Nano firmware contract at PROTOCOL.md.
+- ROS bridge software and pseudo-terminal integration tests passed, but physical USB-RS-485 communication, Nano firmware, encoder calibration, and motor response remain unverified. Front/rear addresses 1 and 2 and the serial defaults are configured values; adapter turnaround and physical bus behavior still require confirmation.
 
 Treat the diagram as a supplied preliminary architecture artifact, not proof of implementation or compatibility. Record design decisions and assumptions explicitly as they are confirmed. Do not infer a clinical, commercial, or other application from the project name alone.
