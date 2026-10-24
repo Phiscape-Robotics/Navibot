@@ -5,7 +5,7 @@
 The engineering problem has not yet been supplied. Define the task NaviBot must perform, the environment and users it serves, and the current limitation the design is intended to address. The project name and component diagram alone do not establish these requirements.
 
 \subsection{Known Design Inputs}
-The repository diagram depicts an 11.1 V nominal Li-ion battery, Raspberry Pi 4B, LiDAR, camera, one Arduino, an L298N dual H-bridge, and four DC motors with encoders. The project owner has identified a serial YDLIDAR X2 and Pi Camera V2 (IMX219), and clarified that the motor system uses two classic Arduino Nano nodes, front and rear, each controlling two motors over a shared USB-RS-485 bus. The diagram does not yet reflect those updates. Remaining component details, motor-driver allocation, transceivers, ratings, compatibility, and realized configuration require confirmation.
+The repository diagram depicts an 11.1 V nominal Li-ion battery, Raspberry Pi 4B, LiDAR, camera, one Arduino, an L298N dual H-bridge, and four DC motors with encoders. The project owner has identified a serial YDLIDAR X2 and Pi Camera V2 (IMX219), and clarified that the motor system uses two Arduino Nano nodes, front and rear, each controlling two motors over a shared USB-RS-485 bus. Each controller board contains a Nano, an L298N, and a UART-to-RS-485 module; 12 V is supplied to the board and the L298N's 5 V output powers other components. The diagram does not yet reflect these updates. Exact module models, rail capability, pin assignments, ratings, compatibility, and realized configuration require confirmation from the schematic and hardware.
 
 \subsection{Constraints and Verification}
 \begin{table}[!htbp]

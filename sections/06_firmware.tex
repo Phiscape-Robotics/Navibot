@@ -81,13 +81,62 @@ The saved launch configuration has delivered 60 image messages and 60 CameraInfo
 For a graphical preview, run \texttt{rqt\_image\_view} on a computer with ROS 2 and a desktop, then select \texttt{/camera/image\_raw}. Remote viewing requires working ROS discovery and matching \texttt{ROS\_DOMAIN\_ID} values between the computer and Pi. A remote terminal does not itself provide a graphical display; this camera setup does not include a browser-based viewer.
 
 \subsection{Motor Bridge and Wheel Interfaces}
-The Pi runs the ROS 2 package \texttt{navibot\_motor\_bridge} as the RS-485 bus master. It communicates through a USB-to-RS-485 adapter with two classic Arduino Nano controllers: the front Nano has address 1 and controls front-left/front-right; the rear Nano has address 2 and controls rear-left/rear-right. Both Nanos perform their own wheel-speed PI control locally. The serial link carries target RPM and returns measured RPM, applied duty, status flags, and sample timing under the firmware contract in \texttt{PROTOCOL.md}. That firmware contract is maintained outside this design-document repository; the Arduino firmware itself is not included here.
+The Pi runs the ROS 2 package \texttt{navibot\_motor\_bridge} as the RS-485 bus master. A single shared half-duplex RS-485 bus links the Pi's USB-to-RS-485 adapter to both motor-controller boards. The front Nano has address 1 and controls front-left/front-right; the rear Nano has address 2 and controls rear-left/rear-right. Both Nanos perform their own wheel-speed PI control locally. The Pi is the only bus master: it polls one addressed Nano at a time, and only that Nano replies, preventing simultaneous node transmissions. The serial link carries target RPM and returns measured RPM, applied duty, status flags, and sample timing. The Nano firmware and wire protocol are not yet implemented; the proposed wire contract is specified below for implementation in the Pi bridge and both Nano nodes.
 
-The bus is half-duplex and the bridge polls one Nano at a time. Termination, biasing, signal reference, and adapter turnaround must be verified against the selected transceiver and USB adapter before physical operation \cite{ti_rs485}.
+The configured transport is 115200 baud, 8 data bits, no parity, and 1 stop bit (8N1), with node addresses 1 (front) and 2 (rear). Each poll/response exchange is one bus transaction; the bridge schedules 50 transactions per second total, alternating between nodes. The proposed frame design below carries the addressed node's two signed wheel-speed targets and returns that node's measured RPM, applied duty, status flags, and sample age. Firmware implementation and physical bus validation are pending. Termination, biasing, signal reference, and adapter turnaround must be verified against the selected transceivers and USB adapter before physical operation \cite{ti_rs485}.
+
+\subsubsection{Proposed RS-485 Frame Design}
+This is the design target for the Pi bridge and both Nano firmware nodes; it is not yet implemented. The Pi sends one request at a time and waits for a matching reply before polling the other node. All multi-byte values are little-endian. No node transmits unless it receives a valid request addressed to its node ID.
+
+\begin{table}[!htbp]
+    \centering
+    \small
+    \begin{tabular}{clp{8.2cm}}
+        \toprule
+        \textbf{Byte(s)} & \textbf{Field} & \textbf{Definition} \\
+        \midrule
+        0--1 & Sync & Fixed bytes \texttt{A5 5A}; used to find a frame boundary. \\
+        2 & Version & Protocol version; set to \texttt{01}. \\
+        3 & Address & Destination for a request or source for a reply; \texttt{01} front, \texttt{02} rear. \\
+        4 & Type & \texttt{01} set-RPM request; \texttt{81} status/feedback reply. \\
+        5 & Sequence & One-byte request counter copied unchanged into the reply; wraps from \texttt{FF} to \texttt{00}. \\
+        6 & Length & Payload length in bytes; request is 4, reply is 12. \\
+        7... & Payload & Message-specific values as defined below. \\
+        Last 2 & CRC & CRC-16/CCITT-FALSE over bytes 2 through the final payload byte; polynomial \texttt{0x1021}, initial value \texttt{0xFFFF}, no reflection, xor-out \texttt{0x0000}; transmit low byte first. \\
+        \bottomrule
+    \end{tabular}
+    \caption{Proposed common frame format. Total frame size is 9 bytes plus payload length.}
+    \label{tab:rs485_frame}
+\end{table}
+
+\begin{table}[!htbp]
+    \centering
+    \small
+    \begin{tabular}{clp{8.2cm}}
+        \toprule
+        \textbf{Type} & \textbf{Payload byte(s)} & \textbf{Meaning} \\
+        \midrule
+        \texttt{01} request & 0--1 & Channel A / motor 1 target RPM, signed 16-bit integer in 0.01 RPM units. \\
+        \texttt{01} request & 2--3 & Channel B / motor 2 target RPM, signed 16-bit integer in 0.01 RPM units. \\
+        \texttt{81} reply & 0--1 & Channel A measured RPM, signed 16-bit integer in 0.01 RPM units. \\
+        \texttt{81} reply & 2--3 & Channel B measured RPM, signed 16-bit integer in 0.01 RPM units. \\
+        \texttt{81} reply & 4--5 & Channel A applied duty, signed 16-bit integer in 0.01 percent units. \\
+        \texttt{81} reply & 6--7 & Channel B applied duty, signed 16-bit integer in 0.01 percent units. \\
+        \texttt{81} reply & 8--9 & Status bit field: bit 0 controller fault, bit 1 channel A RPM invalid, bit 2 channel B RPM invalid, bit 3 command watchdog active; bits 4--15 reserved and sent as zero. \\
+        \texttt{81} reply & 10--11 & Age of the oldest encoder sample used for this reply, unsigned milliseconds, saturating at 65535. \\
+        \bottomrule
+    \end{tabular}
+    \caption{Proposed payload layout. Signed targets are clamped to the configured $\pm135$ RPM limit; duty is limited to $\pm100$ percent.}
+    \label{tab:rs485_payload}
+\end{table}
+
+The bridge should increment the sequence for each new poll and accept a reply only when its version, address, type, sequence, length, and CRC match the outstanding request. A controller should validate the complete request before applying either wheel target, then reply with the same address and sequence. Invalid sync, version, address, type, length, or CRC frames must be discarded without changing targets or refreshing the watchdog. A valid command refreshes the controller's 250 ms command watchdog; if it expires, both motor outputs are set to zero. The bridge uses a 12 ms reply timeout, discards late or mismatched replies, and continues polling the other node. There are no broadcast commands. The parser must recover by scanning for the sync bytes after a malformed frame; because the length is explicit and CRC checked, payload bytes do not require escaping.
+
+Positive RPM is defined as the calibrated forward direction for each wheel. Firmware must apply the configured sign correction for motors whose wiring makes positive duty rotate in reverse. Any change to byte fields, scaling, status bits, or CRC parameters requires a protocol-version increment.
 
 The target ROS message is \texttt{std\_msgs/msg/Float64MultiArray} on \texttt{/motor\_bridge/target\_rpm}, ordered front-left, front-right, rear-left, rear-right. Values are signed RPM, initially limited to $\pm135$ RPM. The publisher must send targets repeatedly; a command expires after 250 ms. Invalid target arrays request zero. The feedback topics are \texttt{/motor\_bridge/wheel\_rpm} and \texttt{/motor\_bridge/wheel\_duty}, also ordered by wheel. Disconnected or stale measurements are reported as NaN. Duty is a signed percentage from $-100$ to $+100$. The \texttt{/motor\_bridge/status} topic is a \texttt{std\_msgs/msg/String} that reports feedback freshness, Nano status flags, and sample times.
 
-The bus uses 115200 baud, 8N1, with front/rear addresses 1 and 2. Its configured poll rate is 50 transactions per second total, yielding feedback from each Nano at approximately 25 Hz; ROS feedback topics publish at 5 Hz. Each wheel value is the latest received value from its controller. Since the two Nanos are polled independently, a four-wheel message is not a synchronized snapshot. The interface does not yet convert \texttt{cmd\_vel} to wheel commands or calculate odometry; wheel diameter, track width, and steering geometry are not yet defined.
+At 50 transactions per second total, each Nano is polled at approximately 25 Hz; ROS feedback topics publish at 5 Hz. Each wheel value is the latest received value from its controller. Since the two Nanos are polled independently, a four-wheel message is not a synchronized snapshot. The interface does not yet convert \texttt{cmd\_vel} to wheel commands or calculate odometry; wheel diameter, track width, and steering geometry are not yet defined.
 
 \subsubsection{Build and launch}
 On the Pi, the bridge is built in the ROS workspace and launched with the USB adapter selected explicitly:
@@ -191,7 +240,7 @@ The Pi workspace uses YDLIDAR SDK commit \texttt{42a82ed10d2304094c111fc63dee8e4
 During initialization the SDK logged \texttt{Fail to get baseplate device information!}, followed by successful initialization and scan streaming. The warning did not prevent that capture; investigate it if scan startup or continuity fails. If the adapter is missing, inspect \texttt{/dev/serial/by-id/} and \texttt{/dev/serial/by-path/}. For permission errors, check \texttt{dialout} membership (the Pi's \texttt{rpi} account is already a member). If scans are absent, check exclusive port ownership, sensor rotation, baud rate, and single-channel configuration. Compare stationary objects at known distances to investigate unexpected ranges or angles. The robot transform, forward-angle alignment, and measurement accuracy remain unverified.
 
 \subsection{Pi Software Validation Status}
-The motor bridge's protocol and pseudo-terminal integration tests have passed with two simulated Nanos, covering signed commands to both addresses, fragmented replies, bad checksums, wrong sequences, command expiry, feedback loss and recovery, and shutdown zero commands. The installed launch command was checked with the adapter absent. These results validate software behavior only: USB-RS-485 turnaround, bus wiring, Nano firmware, encoder calibration, and physical motor response have not been validated. The camera streaming results are recorded in the camera subsection above. The repository's \texttt{tools/scan\_wifi\_devices.py} remains a separate network-discovery utility; its role in the robot is unspecified.
+The motor bridge's pseudo-terminal integration tests have passed with two simulated Nanos, covering signed commands to both addresses, fragmented replies, bad checksums, wrong sequences, command expiry, feedback loss and recovery, and shutdown zero commands. These tests exercise the existing bridge behavior with simulated serial peers; they do not establish implementation or interoperability of the proposed frame design above. The installed launch command was checked with the adapter absent. USB-RS-485 turnaround, bus wiring, Nano firmware, encoder calibration, and physical motor response remain unverified. The camera streaming results are recorded in the camera subsection above. The repository's \texttt{tools/scan\_wifi\_devices.py} remains a separate network-discovery utility; its role in the robot is unspecified.
 
 The integration suite can be rerun in the Pi workspace with:
 \begin{lstlisting}[language=bash]

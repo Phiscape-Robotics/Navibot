@@ -21,30 +21,74 @@ The supplied block diagram is an earlier revision: it shows one Arduino and a di
 }{}}
 
 \subsection{Hardware and Electrical Design}
-The block diagram labels a nominal 11.1 V battery supply, a voltage-regulator/power module, Pi and Arduino controllers, sensors, an L298N motor driver, and four encoder-equipped DC motors. Detailed schematics, part numbers, rail requirements, current budgets, protection, wiring, and grounding are TBD. Confirm that the selected driver and supply are suitable for the chosen motors before treating this architecture as final.
+The motor-control system uses two Arduino Nano nodes: one for the front two motors and one for the rear two. Each custom controller board contains an Arduino Nano, an L298N dual H-bridge, and a UART-to-RS-485 interface module. The board receives 12 V; the L298N module's 5 V output is used to power other components. Confirm the exact L298N module/regulator arrangement, jumper configuration, available 5 V current, and connected loads against the schematic before relying on that rail. Exact part numbers, motor ratings, protection, grounding, and current budgets remain to be documented.
 
-\IfFileExists{figures/circuit_diagram.pdf}{
+The EasyEDA schematic and PCB layout should be included as separate figures:
+\IfFileExists{figures/motor_controller_schematic.pdf}{
     \begin{figure}[!htbp]
         \centering
-        \includegraphics[width=0.95\textwidth,height=0.62\textheight,keepaspectratio]{figures/circuit_diagram}
-        \caption{NaviBot circuit diagram.}
-        \label{fig:circuit_diagram}
+        \includegraphics[width=0.95\textwidth,height=0.62\textheight,keepaspectratio]{figures/motor_controller_schematic}
+        \caption{EasyEDA schematic for one motor-controller board; two front/rear controller nodes are used.}
+        \label{fig:motor_controller_schematic}
     \end{figure}
-}{\IfFileExists{figures/circuit_diagram.png}{
+}{\IfFileExists{figures/motor_controller_schematic.png}{
     \begin{figure}[!htbp]
         \centering
-        \includegraphics[width=0.95\textwidth,height=0.62\textheight,keepaspectratio]{figures/circuit_diagram}
-        \caption{NaviBot circuit diagram.}
-        \label{fig:circuit_diagram}
+        \includegraphics[width=0.95\textwidth,height=0.62\textheight,keepaspectratio]{figures/motor_controller_schematic}
+        \caption{EasyEDA schematic for one motor-controller board; two front/rear controller nodes are used.}
+        \label{fig:motor_controller_schematic}
     \end{figure}
-}{\textit{Circuit-level schematic not yet supplied.}}}
+}{\textit{Motor-controller schematic not yet supplied.}}
+
+\IfFileExists{figures/motor_controller_pcb.pdf}{
+    \begin{figure}[!htbp]
+        \centering
+        \includegraphics[width=0.95\textwidth,height=0.62\textheight,keepaspectratio]{figures/motor_controller_pcb}
+        \caption{PCB layout for the motor-controller board.}
+        \label{fig:motor_controller_pcb}
+    \end{figure}
+}{\IfFileExists{figures/motor_controller_pcb.png}{
+    \begin{figure}[!htbp]
+        \centering
+        \includegraphics[width=0.95\textwidth,height=0.62\textheight,keepaspectratio]{figures/motor_controller_pcb}
+        \caption{PCB layout for the motor-controller board.}
+        \label{fig:motor_controller_pcb}
+    \end{figure}
+}{\textit{Motor-controller PCB layout not yet supplied.}}}
+
+The following signal assignments are transcribed from the supplied EasyEDA schematic. Arduino pin names are shown as printed in the schematic:
+\begin{table}[!htbp]
+    \centering
+    \small
+    \begin{tabular}{p{4.0cm}p{3.5cm}p{6.0cm}}
+        \toprule
+        \textbf{Signal} & \textbf{Nano pin} & \textbf{Connection / purpose} \\
+        \midrule
+        L298N EN\_A, IN\_A1, IN\_A2 & A0, A4, A3 & Motor channel A control \\
+        L298N EN\_B, IN\_B1, IN\_B2 & A5, A2, A1 & Motor channel B control \\
+        Motor outputs M\_A1/M\_A2 & L298N outputs 10/11 & Motor 1 \\
+        Motor outputs M\_B1/M\_B2 & L298N outputs 12/13 & Motor 2 \\
+        Encoder EA\_1, EA\_2 & D3, D4 & Motor 1 encoder \\
+        Encoder EB\_1, EB\_2 & D11, D12 & Motor 2 encoder \\
+        RS-485 RO / DI & D0/RX0 / D1/TX0 & UART receive / transmit \\
+        RS-485 DE and \textbackslash RE & D2 & Driver-enable direction control; DE and RE tied together \\
+        RS-485 A+ / B- & Board bus terminals & Shared differential bus between both motor-controller boards and the Pi's USB-RS-485 adapter \\
+        Supply input & +12 V and GND & Board power connector \\
+        Logic supply & +5 V and GND & Nano, RS-485 module, and encoder supply nets \\
+        \bottomrule
+    \end{tabular}
+    \caption{Motor-controller board signal map transcribed from the supplied schematic.}
+    \label{tab:motor_controller_pins}
+\end{table}
+
+\textbf{RS-485 schematic discrepancy:} the project owner confirms that the RS-485 bus connects the front and rear motor-controller boards to the Raspberry Pi through its USB-RS-485 adapter. However, the supplied schematic marks transceiver A+ and B- as no-connect, which does not match the confirmed wiring. Update the EasyEDA schematic and exported PDF to show the bus connector and differential pair, then verify A/B polarity against the adapter and both nodes. The schematic also shows the +5 V rail at the Nano, encoder, and transceiver but does not show its regulator source; confirm that it is supplied by the L298N module's 5 V output and that the output can support the total load.
 
 \subsection{Subsystem Configuration}
 \subsubsection{Compute and Sensing}
 The diagram depicts a Raspberry Pi 4B (4 GB), LiDAR, and camera, connected to an Arduino by UART. The confirmed design uses a USB-RS-485 adapter at the Pi and a shared bus with front and rear Arduino Nano nodes; the camera model is Pi Camera V2 (IMX219), and the serial LiDAR is a YDLIDAR X2. The ROS 2 driver has streamed scans on the Pi; mounting transform, forward-angle alignment, and ranging accuracy remain to be verified. The ROS 2 motor-bridge interfaces, camera bring-up, and sensor details are described in Section 6.
 
 \subsubsection{Controller and Drive System}
-The intended control system has two classic Arduino Nano nodes, one controlling the front-left/front-right motors and one controlling the rear-left/rear-right motors, on the shared RS-485 bus. The current diagram instead shows one Arduino linked to an L298N and four motors. The motor-driver allocation and encoder wiring for the two-controller arrangement need confirmation; update both the editable Draw.io source and its exported image when resolved.
+The control system has two classic Arduino Nano nodes on the shared RS-485 bus. Each node is mounted on a custom board with an L298N and UART-to-RS-485 module and controls its respective pair of motors: front-left/front-right or rear-left/rear-right. The existing block diagram still shows one Arduino and must be revised to show both controller boards and the shared bus. Confirm from the schematic which encoder signals are wired to each board and how the nodes are powered.
 
 \subsubsection{Power Distribution}
 The diagram depicts an 11.1 V nominal Li-ion battery and voltage-regulator/power module. Cell configuration, capacity, regulator outputs, current limits, charging, protection, and runtime are TBD.

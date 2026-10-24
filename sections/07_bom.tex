@@ -15,9 +15,9 @@ The architecture diagram provides candidate component labels but not enough veri
         2 & LiDAR & YDLIDAR X2 serial model; verify hardware revision & 1 & TBD & TBD \\
         3 & Camera & Pi Camera V2 (IMX219); verify revision & 1 & TBD & TBD \\
         4 & Arduino controllers & Classic Nano; one front node and one rear node & 2 & TBD & TBD \\
-        5 & Motor drivers & Driver allocation/model TBD; old diagram shows one L298N & TBD & TBD & TBD \\
+        5 & Motor-controller boards & Two custom boards, each with one L298N dual H-bridge & 2 & TBD & TBD \\
         6 & DC motors & Two controlled by each Arduino; exact models TBD & 4 & TBD & TBD \\
-        7 & RS-485 interface hardware & Pi USB adapter and transceivers for both nodes; exact models TBD & 1 + 2 & TBD & TBD \\
+        7 & RS-485 interface hardware & Pi USB adapter and UART-to-RS-485 module on each controller board; exact models TBD & 1 + 2 & TBD & TBD \\
         8 & Battery and power module & 11.1 V nominal battery shown; ratings TBD & TBD & TBD & TBD \\
         \bottomrule
     \end{tabular}
