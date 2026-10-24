@@ -88,6 +88,41 @@ The configured transport is 115200 baud, 8 data bits, no parity, and 1 stop bit 
 \subsubsection{Proposed RS-485 Frame Design}
 This is the design target for the Pi bridge and both Nano firmware nodes; it is not yet implemented. The Pi sends one request at a time and waits for a matching reply before polling the other node. All multi-byte values are little-endian. No node transmits unless it receives a valid request addressed to its node ID.
 
+\begin{figure}[!htbp]
+    \centering
+    \resizebox{0.96\textwidth}{!}{%
+    \begin{tikzpicture}[font=\small]
+        % Protocol-level packet: fields are transmitted from left to right.
+        \draw[line width=1pt] (0,1.12) -- (11.6,1.12);
+        \draw[line width=1pt] (0,1.12) -- (0,0.92);
+        \draw[line width=1pt] (11.6,1.12) -- (11.6,0.92);
+        \node[fill=white,inner sep=2pt] at (5.8,1.12) {\textbf{RS-485 packet (bytes)}};
+        \node[draw,minimum width=1.7cm,minimum height=1.05cm,align=center] at (0.85,0.35) {Sync\\2 bytes};
+        \node[draw,minimum width=0.9cm,minimum height=1.05cm,align=center] at (2.15,0.35) {Version\\1};
+        \node[draw,minimum width=0.9cm,minimum height=1.05cm,align=center] at (3.05,0.35) {Address\\1};
+        \node[draw,minimum width=0.9cm,minimum height=1.05cm,align=center] at (3.95,0.35) {Type\\1};
+        \node[draw,minimum width=0.9cm,minimum height=1.05cm,align=center] at (4.85,0.35) {Sequence\\1};
+        \node[draw,minimum width=0.9cm,minimum height=1.05cm,align=center] at (5.75,0.35) {Length\\1};
+        \node[draw,minimum width=4cm,minimum height=1.05cm,align=center] at (8.2,0.35) {Payload\\4-byte request or 12-byte reply};
+        \node[draw,minimum width=1.4cm,minimum height=1.05cm,align=center] at (10.9,0.35) {CRC\\2 bytes};
+
+        % UART physical framing for each byte, configured as 8N1.
+        \node[anchor=west] at (0,-1.05) {\textbf{Each byte on UART (8N1)}};
+        \node[draw,minimum width=1.1cm,minimum height=0.8cm,align=center] at (0.55,-1.8) {Start\\0};
+        \foreach \i in {0,...,7} {
+            \pgfmathsetmacro{\xcenter}{1.45+0.7*\i}
+            \node[draw,minimum width=0.7cm,minimum height=0.8cm,align=center] at (\xcenter,-1.8) {\scriptsize D\i};
+        }
+        \node[draw,minimum width=1.3cm,minimum height=0.8cm,align=center] at (7.35,-1.8) {No parity};
+        \node[draw,minimum width=1.1cm,minimum height=0.8cm,align=center] at (8.55,-1.8) {Stop\\1};
+        \draw[-latex,line width=0.8pt] (0,-2.42) -- (9.1,-2.42)
+            node[midway,below] {Transmission order (data bits least-significant bit first)};
+    \end{tikzpicture}%
+    }
+    \caption{Proposed RS-485 packet fields and UART 8N1 framing. The upper row shows protocol bytes; each byte is serialized using the lower row.}
+    \label{fig:rs485_packet}
+\end{figure}
+
 \begin{table}[!htbp]
     \centering
     \small
